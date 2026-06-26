@@ -13,12 +13,35 @@ The tool uses **phase correlation** (FFT-based image comparison) to measure exac
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/imessage-video-clipper.git
+git clone https://github.com/kphilippp/imessage-video-clipper.git
 cd imessage-video-clipper
 pip install -e .
 ```
 
 ## Usage
+
+### Web UI (Recommended)
+
+Launch the web interface for a visual drag-and-drop experience:
+
+```bash
+imessage-video-clipper-web
+```
+
+Then open **http://127.0.0.1:5050** in your browser.
+
+- Drag & drop a `.mov` or `.mp4` screen recording
+- Adjust overlap and crop settings via the gear icon
+- Click **Process** and wait for extraction
+- Preview screenshots in-app, then **Download All** as a ZIP
+
+To use a custom port:
+
+```bash
+imessage-video-clipper-web --port 8080
+```
+
+### CLI
 
 ```bash
 # Basic usage
@@ -63,6 +86,8 @@ output/
 ├── screenshot_003.png
 └── ...
 ```
+
+The web UI also provides a **Download All** button that packages all screenshots into a single ZIP file.
 
 ## Algorithm Details
 

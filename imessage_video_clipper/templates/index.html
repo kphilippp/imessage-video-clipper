@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iMessage Video Clipper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top bar ── */
+        .topbar {
+            background: #1c1c1e;
+            border-bottom: 1px solid #2c2c2e;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .topbar-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #34c759, #30d158);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .topbar-text h1 {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .topbar-text p {
+            font-size: 13px;
+            color: #8e8e93;
+            margin-top: 1px;
+        }
+
+        /* ── Chat area ── */
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #000;
+        }
+
+        .bubble {
+            max-width: 75%;
+            padding: 10px 16px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            animation: fadeUp 0.3s ease;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bubble.received {
+            background: #2c2c2e;
+            color: #fff;
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+        }
+
+        .bubble.sent {
+            background: #007aff;
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+
+        .bubble.system {
+            background: transparent;
+            color: #8e8e93;
+            align-self: center;
+            font-size: 13px;
+            padding: 8px 0;
+        }
+
+        /* ── Upload zone (shown inside chat) ── */
+        .upload-zone {
+            border: 2px dashed #3a3a3c;
+            border-radius: 20px;
+            padding: 50px 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            align-self: center;
+            width: 100%;
+            max-width: 500px;
+            margin: auto 0;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: #007aff;
+            background: rgba(0, 122, 255, 0.08);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .upload-zone h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .upload-zone p {
+            color: #8e8e93;
+            font-size: 14px;
+        }
+
+        .upload-zone .file-types {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .file-badge {
+            background: #2c2c2e;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #8e8e93;
+        }
+
+        /* ── Settings bar ── */
+        .settings-bar {
+            background: #1c1c1e;
+            border-top: 1px solid #2c2c2e;
+            padding: 12px 20px;
+            display: none;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .settings-bar.visible {
+            display: flex;
+        }
+
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .setting-group label {
+            font-size: 13px;
+            color: #8e8e93;
+            white-space: nowrap;
+        }
+
+        .setting-group input[type="range"] {
+            width: 100px;
+            accent-color: #007aff;
+        }
+
+        .setting-value {
+            font-size: 13px;
+            color: #fff;
+            min-width: 35px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ── Bottom bar ── */
+        .bottom-bar {
+            background: #1c1c1e;
+            border-top: 1px solid #2c2c2e;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .file-info {
+            flex: 1;
+            font-size: 14px;
+            color: #8e8e93;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-info.has-file {
+            color: #fff;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border-radius: 20px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #007aff;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #0a84ff;
+        }
+
+        .btn-green {
+            background: #30d158;
+            color: #fff;
+        }
+
+        .btn-green:hover {
+            background: #34c759;
+        }
+
+        .btn-settings {
+            background: none;
+            border: none;
+            color: #8e8e93;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.15s;
+        }
+
+        .btn-settings:hover {
+            color: #fff;
+        }
+
+        /* ── Processing ── */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #8e8e93;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+            30% { opacity: 1; transform: scale(1); }
+        }
+
+        /* ── Results gallery ── */
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 9/16;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.03);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-item .badge {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* ── Lightbox ── */
+        .lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ── New clip button ── */
+        .btn-new {
+            background: #2c2c2e;
+            color: #fff;
+            margin-left: 8px;
+        }
+
+        .btn-new:hover {
+            background: #3a3a3c;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .bubble { max-width: 88%; }
+            .gallery { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+            .setting-group input[type="range"] { width: 70px; }
+        }
+
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-icon">✂️</div>
+        <div class="topbar-text">
+            <h1>iMessage Video Clipper</h1>
+            <p>Split recordings into screenshots</p>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area" id="chatArea">
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">📱</div>
+            <h2>Drop your screen recording</h2>
+            <p>Drag & drop a video of your text conversation, or click to browse</p>
+            <div class="file-types">
+                <span class="file-badge">.MOV</span>
+                <span class="file-badge">.MP4</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Bar -->
+    <div class="settings-bar" id="settingsBar">
+        <div class="setting-group">
+            <label>Overlap</label>
+            <input type="range" id="overlap" min="0" max="50" value="15">
+            <span class="setting-value" id="overlapValue">15%</span>
+        </div>
+        <div class="setting-group">
+            <label>Top Crop</label>
+            <input type="range" id="topCrop" min="0" max="40" value="15">
+            <span class="setting-value" id="topCropValue">15%</span>
+        </div>
+        <div class="setting-group">
+            <label>Bottom Crop</label>
+            <input type="range" id="bottomCrop" min="0" max="40" value="15">
+            <span class="setting-value" id="bottomCropValue">15%</span>
+        </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar" id="bottomBar">
+        <button class="btn-settings" id="settingsBtn" title="Settings">⚙️</button>
+        <div class="file-info" id="fileInfo">No file selected</div>
+        <button class="btn btn-primary" id="processBtn" disabled>Process</button>
+    </div>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <img id="lightboxImg" src="" alt="Screenshot preview">
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="fileInput" accept=".mov,.mp4,video/quicktime,video/mp4">
+
+    <script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const chatArea = document.getElementById('chatArea');
+        const processBtn = document.getElementById('processBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const settingsBar = document.getElementById('settingsBar');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const bottomBar = document.getElementById('bottomBar');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+
+        let selectedFile = null;
+
+        // Settings sliders
+        document.getElementById('overlap').addEventListener('input', e => {
+            document.getElementById('overlapValue').textContent = e.target.value + '%';
+        });
+        document.getElementById('topCrop').addEventListener('input', e => {
+            document.getElementById('topCropValue').textContent = e.target.value + '%';
+        });
+        document.getElementById('bottomCrop').addEventListener('input', e => {
+            document.getElementById('bottomCropValue').textContent = e.target.value + '%';
+        });
+
+        settingsBtn.addEventListener('click', () => {
+            settingsBar.classList.toggle('visible');
+        });
+
+        // Upload zone
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+
+        fileInput.addEventListener('change', e => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!['mov', 'mp4'].includes(ext)) {
+                addBubble('Only .mov and .mp4 files are supported.', 'received');
+                return;
+            }
+
+            selectedFile = file;
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+
+            uploadZone.style.display = 'none';
+            addBubble(`📎 ${file.name} (${sizeMB} MB)`, 'sent');
+
+            fileInfo.textContent = file.name;
+            fileInfo.classList.add('has-file');
+            processBtn.disabled = false;
+        }
+
+        processBtn.addEventListener('click', () => {
+            if (!selectedFile) return;
+            processVideo();
+        });
+
+        function addBubble(text, type) {
+            const div = document.createElement('div');
+            div.className = `bubble ${type}`;
+            div.innerHTML = text;
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return div;
+        }
+
+        function addTypingBubble() {
+            const div = document.createElement('div');
+            div.className = 'bubble received';
+            div.id = 'typingBubble';
+            div.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return div;
+        }
+
+        function removeTypingBubble() {
+            const el = document.getElementById('typingBubble');
+            if (el) el.remove();
+        }
+
+        async function processVideo() {
+            processBtn.disabled = true;
+            processBtn.textContent = 'Processing...';
+            settingsBar.classList.remove('visible');
+
+            addBubble('Process this video for me ✨', 'sent');
+
+            await sleep(400);
+            addTypingBubble();
+            await sleep(800);
+            removeTypingBubble();
+            addBubble('On it! Analyzing scroll patterns and extracting screenshots...', 'received');
+
+            await sleep(300);
+            addTypingBubble();
+
+            const formData = new FormData();
+            formData.append('video', selectedFile);
+            formData.append('overlap', document.getElementById('overlap').value / 100);
+            formData.append('top_crop', document.getElementById('topCrop').value / 100);
+            formData.append('bottom_crop', document.getElementById('bottomCrop').value / 100);
+
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                removeTypingBubble();
+
+                if (!response.ok) {
+                    addBubble(`❌ Error: ${data.error}`, 'received');
+                    processBtn.disabled = false;
+                    processBtn.textContent = 'Retry';
+                    return;
+                }
+
+                addBubble(`Done! Extracted <strong>${data.count}</strong> screenshots with minimal overlap.`, 'received');
+
+                await sleep(300);
+
+                // Build gallery
+                let galleryHTML = '<div class="gallery">';
+                data.screenshots.forEach((name, i) => {
+                    const url = `/screenshot/${data.job_id}/${name}`;
+                    galleryHTML += `
+                        <div class="gallery-item" onclick="openLightbox('${url}')">
+                            <img src="${url}" alt="${name}" loading="lazy">
+                            <span class="badge">${i + 1}</span>
+                        </div>`;
+                });
+                galleryHTML += '</div>';
+
+                addBubble(galleryHTML, 'received');
+
+                // Replace bottom bar with download controls
+                bottomBar.innerHTML = `
+                    <a href="/download/${data.job_id}" class="btn btn-green" style="text-decoration:none">⬇ Download All (ZIP)</a>
+                    <button class="btn btn-new" onclick="location.reload()">New Clip</button>
+                `;
+
+            } catch (err) {
+                removeTypingBubble();
+                addBubble(`❌ Something went wrong: ${err.message}`, 'received');
+                processBtn.disabled = false;
+                processBtn.textContent = 'Retry';
+            }
+        }
+
+        function openLightbox(url) {
+            lightboxImg.src = url;
+            lightbox.classList.add('active');
+        }
+
+        lightbox.addEventListener('click', () => {
+            lightbox.classList.remove('active');
+        });
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>

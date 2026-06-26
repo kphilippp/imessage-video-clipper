@@ -530,19 +530,16 @@
 
         async function processVideo() {
             processBtn.disabled = true;
-            processBtn.textContent = 'Processing...';
+            processBtn.textContent = 'Uploading...';
             settingsBar.classList.remove('visible');
 
-            addBubble('Process this video for me ✨', 'sent');
+            addBubble('Process this video for me', 'sent');
 
             await sleep(400);
             addTypingBubble();
-            await sleep(800);
+            await sleep(600);
             removeTypingBubble();
-            addBubble('On it! Analyzing scroll patterns and extracting screenshots...', 'received');
-
-            await sleep(300);
-            addTypingBubble();
+            addBubble('Uploading your video...', 'received');
 
             const formData = new FormData();
             formData.append('video', selectedFile);
@@ -554,42 +551,60 @@
                 const response = await fetch('/upload', { method: 'POST', body: formData });
                 const data = await response.json();
 
-                removeTypingBubble();
-
                 if (!response.ok) {
-                    addBubble(`❌ Error: ${data.error}`, 'received');
+                    addBubble(`Error: ${data.error}`, 'received');
                     processBtn.disabled = false;
                     processBtn.textContent = 'Retry';
                     return;
                 }
 
-                addBubble(`Done! Extracted <strong>${data.count}</strong> screenshots with minimal overlap.`, 'received');
+                const jobId = data.job_id;
 
-                await sleep(300);
+                const progressBubble = addBubble('Analyzing scroll patterns... <strong>0%</strong>', 'received');
 
-                // Build gallery
-                let galleryHTML = '<div class="gallery">';
-                data.screenshots.forEach((name, i) => {
-                    const url = `/screenshot/${data.job_id}/${name}`;
-                    galleryHTML += `
-                        <div class="gallery-item" onclick="openLightbox('${url}')">
-                            <img src="${url}" alt="${name}" loading="lazy">
-                            <span class="badge">${i + 1}</span>
-                        </div>`;
-                });
-                galleryHTML += '</div>';
+                // Poll for progress
+                while (true) {
+                    await sleep(1000);
+                    const statusRes = await fetch(`/status/${jobId}`);
+                    const status = await statusRes.json();
 
-                addBubble(galleryHTML, 'received');
+                    if (status.status === 'done') {
+                        progressBubble.innerHTML = `Done! Extracted <strong>${status.count}</strong> screenshot${status.count !== 1 ? 's' : ''} with minimal overlap.`;
 
-                // Replace bottom bar with download controls
-                bottomBar.innerHTML = `
-                    <a href="/download/${data.job_id}" class="btn btn-green" style="text-decoration:none">⬇ Download All (ZIP)</a>
-                    <button class="btn btn-new" onclick="location.reload()">New Clip</button>
-                `;
+                        await sleep(300);
+
+                        let galleryHTML = '<div class="gallery">';
+                        status.screenshots.forEach((name, i) => {
+                            const url = `/screenshot/${jobId}/${name}`;
+                            galleryHTML += `
+                                <div class="gallery-item" onclick="openLightbox('${url}')">
+                                    <img src="${url}" alt="${name}" loading="lazy">
+                                    <span class="badge">${i + 1}</span>
+                                </div>`;
+                        });
+                        galleryHTML += '</div>';
+
+                        addBubble(galleryHTML, 'received');
+
+                        bottomBar.innerHTML = `
+                            <a href="/download/${jobId}" class="btn btn-green" style="text-decoration:none">Download All (ZIP)</a>
+                            <button class="btn btn-new" onclick="location.reload()">New Clip</button>
+                        `;
+                        break;
+                    } else if (status.status === 'error') {
+                        progressBubble.innerHTML = `Error: ${status.error}`;
+                        processBtn.disabled = false;
+                        processBtn.textContent = 'Retry';
+                        break;
+                    } else {
+                        progressBubble.innerHTML = `Analyzing scroll patterns... <strong>${status.progress}%</strong>`;
+                        chatArea.scrollTop = chatArea.scrollHeight;
+                    }
+                }
 
             } catch (err) {
                 removeTypingBubble();
-                addBubble(`❌ Something went wrong: ${err.message}`, 'received');
+                addBubble(`Something went wrong: ${err.message}`, 'received');
                 processBtn.disabled = false;
                 processBtn.textContent = 'Retry';
             }

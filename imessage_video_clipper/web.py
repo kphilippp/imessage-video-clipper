@@ -1,6 +1,8 @@
 import os
 import shutil
 import tempfile
+import threading
+import traceback
 import uuid
 import zipfile
 
@@ -48,41 +50,82 @@ def upload():
     top_crop = float(request.form.get("top_crop", 0.15))
     bottom_crop = float(request.form.get("bottom_crop", 0.15))
 
-    try:
-        import cv2
+    import cv2
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            return jsonify({"error": "Cannot open video file"}), 400
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        cap.release()
-
-        content_height = frame_height * (1.0 - top_crop - bottom_crop)
-        capture_threshold = content_height * (1.0 - overlap)
-
-        detector = ScrollDetector(top_crop=top_crop, bottom_crop=bottom_crop, min_confidence=0.05)
-        accumulator = ScrollAccumulator(capture_threshold=capture_threshold)
-        extractor = FrameExtractor(
-            video_path=video_path,
-            output_dir=output_dir,
-            scroll_detector=detector,
-            scroll_accumulator=accumulator,
-        )
-
-        saved = extractor.run()
-
-        screenshots = []
-        for path in saved:
-            filename = os.path.basename(path)
-            screenshots.append(filename)
-
-        JOBS[job_id] = {"output_dir": output_dir, "screenshots": screenshots, "job_dir": job_dir}
-
-        return jsonify({"job_id": job_id, "screenshots": screenshots, "count": len(screenshots)})
-
-    except Exception as e:
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
         shutil.rmtree(job_dir, ignore_errors=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Cannot open video file"}), 400
+
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
+    # Auto frame-skip: process ~10 frames per second of video, minimum 1
+    frame_skip = max(1, int(fps / 10)) if fps > 0 else 1
+
+    content_height = frame_height * (1.0 - top_crop - bottom_crop)
+    capture_threshold = content_height * (1.0 - overlap)
+
+    JOBS[job_id] = {
+        "status": "processing",
+        "progress": 0,
+        "total_frames": total_frames,
+        "output_dir": output_dir,
+        "job_dir": job_dir,
+        "screenshots": [],
+        "error": None,
+    }
+
+    def process():
+        try:
+            detector = ScrollDetector(top_crop=top_crop, bottom_crop=bottom_crop, min_confidence=0.05)
+            accumulator = ScrollAccumulator(capture_threshold=capture_threshold)
+            extractor = FrameExtractor(
+                video_path=video_path,
+                output_dir=output_dir,
+                scroll_detector=detector,
+                scroll_accumulator=accumulator,
+                frame_skip=frame_skip,
+                progress_callback=lambda current, total: update_progress(job_id, current, total),
+            )
+
+            saved = extractor.run()
+
+            screenshots = [os.path.basename(p) for p in saved]
+            JOBS[job_id]["screenshots"] = screenshots
+            JOBS[job_id]["status"] = "done"
+            JOBS[job_id]["progress"] = 100
+        except Exception as e:
+            traceback.print_exc()
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["error"] = str(e)
+
+    thread = threading.Thread(target=process, daemon=True)
+    thread.start()
+
+    return jsonify({"job_id": job_id, "total_frames": total_frames, "frame_skip": frame_skip})
+
+
+def update_progress(job_id, current_frame, total_frames):
+    if job_id in JOBS and total_frames > 0:
+        JOBS[job_id]["progress"] = int(current_frame / total_frames * 100)
+
+
+@app.route("/status/<job_id>")
+def job_status(job_id):
+    if job_id not in JOBS:
+        return jsonify({"error": "Job not found"}), 404
+
+    job = JOBS[job_id]
+    return jsonify({
+        "status": job["status"],
+        "progress": job["progress"],
+        "screenshots": job["screenshots"] if job["status"] == "done" else [],
+        "count": len(job["screenshots"]) if job["status"] == "done" else 0,
+        "error": job["error"],
+    })
 
 
 @app.route("/screenshot/<job_id>/<filename>")
@@ -121,7 +164,7 @@ def main():
     args = parser.parse_args()
 
     print(f"Starting iMessage Video Clipper UI at http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ class FrameExtractor:
         scroll_accumulator: ScrollAccumulator,
         frame_skip: int = 1,
         verbose: bool = False,
+        progress_callback=None,
     ):
         self.video_path = video_path
         self.output_dir = output_dir
@@ -22,6 +23,7 @@ class FrameExtractor:
         self.scroll_accumulator = scroll_accumulator
         self.frame_skip = frame_skip
         self.verbose = verbose
+        self.progress_callback = progress_callback
 
     def run(self) -> list[str]:
         cap = cv2.VideoCapture(self.video_path)
@@ -86,9 +88,12 @@ class FrameExtractor:
 
             prev_frame = curr_frame
 
-            if frame_index % 500 == 0 and not self.verbose:
-                pct = frame_index / total_frames * 100 if total_frames > 0 else 0
-                print(f"  Processing... {pct:.0f}%", file=sys.stderr)
+            if frame_index % 100 == 0:
+                if self.progress_callback:
+                    self.progress_callback(frame_index, total_frames)
+                elif not self.verbose:
+                    pct = frame_index / total_frames * 100 if total_frames > 0 else 0
+                    print(f"  Processing... {pct:.0f}%", file=sys.stderr)
 
         if self.scroll_accumulator.should_capture_final():
             screenshot_num += 1
